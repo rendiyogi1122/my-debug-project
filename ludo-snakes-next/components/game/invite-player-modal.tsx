@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { searchUsers, sendInvite } from "@/lib/actions/room";
+import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 
 interface Profile {
@@ -67,6 +68,14 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
       if (result?.success) {
         setSentIds((prev) => new Set(prev).add(profile.id));
         setMessage({ text: `✅ Undangan terkirim ke ${profile.name}!`, type: "success" });
+
+        // 🔔 Broadcast langsung ke channel penerima supaya realtime tanpa refresh
+        const supabase = createClient();
+        await supabase.channel(`invites:${profile.id}`).send({
+          type: "broadcast",
+          event: "new_invite",
+          payload: { fromRoomCode: roomCode },
+        });
       } else {
         setMessage({ text: result?.message ?? "Gagal mengirim undangan.", type: "error" });
       }

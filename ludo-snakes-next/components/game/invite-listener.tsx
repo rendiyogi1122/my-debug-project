@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useRealtime } from "@/hooks/use-realtime";
 import { InviteCard } from "./invite-card";
 
 interface Invite {
@@ -25,32 +24,71 @@ export function InviteListener({ userId, initialInvites }: InviteListenerProps) 
   const router = useRouter();
   const [invites, setInvites] = useState<Invite[]>(initialInvites);
 
-  useRealtime({
-    channel: `invites:${userId}`,
-    table: "invites",
-    filter: `to_user_id=eq.${userId}`,
-    onPostgresChange: async (payload) => {
-      // Ada invite baru atau status berubah — fetch ulang
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("invites")
-        .select(`
-          *,
-          rooms(room_code, status),
-          profiles!invites_from_user_id_fkey(name, avatar_url)
-        `)
-        .eq("to_user_id", userId)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false });
+  // Fetch ulang invites dari Supabase
+  const refetchInvites = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("invites")
+      .select(`
+        *,
+        rooms(room_code, status),
+        profiles!invites_from_user_id_fkey(name, avatar_url)
+      `)
+      .eq("to_user_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
 
-      if (data) setInvites(data as Invite[]);
+    if (data) setInvites(data as Invite[]);
+  }, [userId]);
 
-      // Kalau ada invite baru, refresh halaman supaya data server ikut update
-      if (payload.eventType === "INSERT") {
+  useEffect(() => {
+    const supabase = createClient();
+
+    // ── Channel 1: postgres_changes (backup, jika Replica Identity aktif) ──
+    const pgChannel = supabase
+      .channel(`invites-pg:${userId}`)
+      .on(
+        "postgres_changes" as any,
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "invites",
+          filter: `to_user_id=eq.${userId}`,
+        },
+        async () => {
+          await refetchInvites();
+        }
+      )
+      .on(
+        "postgres_changes" as any,
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "invites",
+          filter: `to_user_id=eq.${userId}`,
+        },
+        async () => {
+          await refetchInvites();
+        }
+      )
+      .subscribe();
+
+    // ── Channel 2: broadcast (utama, real-time instan dari pengirim) ──
+    const broadcastChannel = supabase
+      .channel(`invites:${userId}`)
+      .on("broadcast", { event: "new_invite" }, async () => {
+        // Ada invite baru → fetch ulang dari DB
+        await refetchInvites();
+        // Refresh server component supaya data SSR juga sinkron
         router.refresh();
-      }
-    },
-  });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(pgChannel);
+      supabase.removeChannel(broadcastChannel);
+    };
+  }, [userId, refetchInvites, router]);
 
   if (invites.length === 0) return null;
 
