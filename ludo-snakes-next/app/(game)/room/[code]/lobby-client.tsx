@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtime } from "@/hooks/use-realtime";
 import Image from "next/image";
+import { InvitePlayerModal } from "@/components/game/invite-player-modal";
 
 interface Player {
   id: string;
@@ -35,6 +36,7 @@ export function LobbyClient({ roomCode, roomId, isHost, currentUserId, initialPl
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [isStarting, setIsStarting] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const canStart = players.length >= 2 && isHost;
 
@@ -166,6 +168,23 @@ export function LobbyClient({ roomCode, roomId, isHost, currentUserId, initialPl
             <p className="text-sm mb-3 text-center" style={{ color:"var(--t2)" }}>
               {canStart ? "✅ Semua siap! Mulai gamenya sekarang." : "⏳ Butuh minimal 2 pemain untuk mulai."}
             </p>
+
+            {/* Tombol Undang Pemain — hanya muncul kalau slot masih ada */}
+            {players.length < 4 && (
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="w-full py-3 rounded-2xl text-sm font-semibold mb-3 transition-all"
+                style={{
+                  background: "var(--bg)",
+                  color: "var(--pp)",
+                  border: "1.5px solid var(--pp)",
+                  cursor: "pointer",
+                }}
+              >
+                👥 Undang Pemain
+              </button>
+            )}
+
             <button onClick={handleStartGame} disabled={!canStart || isStarting}
               className="w-full py-4 rounded-2xl text-base font-semibold transition-all"
               style={{
@@ -188,6 +207,15 @@ export function LobbyClient({ roomCode, roomId, isHost, currentUserId, initialPl
           </div>
         )}
       </div>
+
+      {/* Modal undang pemain */}
+      {showInviteModal && (
+        <InvitePlayerModal
+          roomCode={roomCode}
+          roomId={roomId}
+          onClose={() => setShowInviteModal(false)}
+        />
+      )}
     </div>
   );
 }

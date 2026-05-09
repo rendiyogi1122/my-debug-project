@@ -215,6 +215,34 @@ export async function respondInvite(
   redirect(`/room/${room.room_code}`);
 }
 
+// ── Cari user untuk diundang ────────────────────────────────
+export async function searchUsers(query: string, roomId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  if (!query || query.trim().length < 2) return [];
+
+  // Ambil user_id yang sudah ada di room
+  const { data: roomPlayers } = await supabase
+    .from("room_players")
+    .select("user_id")
+    .eq("room_id", roomId);
+
+  const existingUserIds = (roomPlayers ?? []).map((p: { user_id: string }) => p.user_id);
+  existingUserIds.push(user.id); // exclude diri sendiri
+
+  // Cari user berdasarkan nama
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, name, avatar_url")
+    .ilike("name", `%${query.trim()}%`)
+    .not("id", "in", `(${existingUserIds.join(",")})`)
+    .limit(8);
+
+  return profiles ?? [];
+}
+
 // ── Keluar dari room ─────────────────────────────────────────
 export async function leaveRoom(roomCode: string) {
   const supabase = await createClient();
