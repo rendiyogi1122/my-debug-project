@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { joinRoom } from "@/lib/actions/room";
 
 export function JoinRoomInput() {

@@ -73,6 +73,11 @@ body {
   100% { transform: scale(1); }
 }
 
+@keyframes slot-roll {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-420px); }
+}
+
 .animate-float     { animation: float 3s ease-in-out infinite; }
 .animate-bounce-in { animation: bounce-in 0.4s ease forwards; }
 .animate-fade-up   { animation: fade-up 0.35s ease forwards; }

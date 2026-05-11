@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { cn } from "@/lib/utils";
 
 interface DiceProps {
@@ -10,11 +11,36 @@ interface DiceProps {
 
 const DOTS: Record<number, number[][]> = {
   1: [[50, 50]],
-  2: [[25, 25], [75, 75]],
-  3: [[25, 25], [50, 50], [75, 75]],
-  4: [[25, 25], [75, 25], [25, 75], [75, 75]],
-  5: [[25, 25], [75, 25], [50, 50], [25, 75], [75, 75]],
-  6: [[25, 25], [75, 25], [25, 50], [75, 50], [25, 75], [75, 75]],
+  2: [
+    [25, 25],
+    [75, 75],
+  ],
+  3: [
+    [25, 25],
+    [50, 50],
+    [75, 75],
+  ],
+  4: [
+    [25, 25],
+    [75, 25],
+    [25, 75],
+    [75, 75],
+  ],
+  5: [
+    [25, 25],
+    [75, 25],
+    [50, 50],
+    [25, 75],
+    [75, 75],
+  ],
+  6: [
+    [25, 25],
+    [75, 25],
+    [25, 50],
+    [75, 50],
+    [25, 75],
+    [75, 75],
+  ],
 };
 
 export function Dice({ value, color, rolling = false }: DiceProps) {
@@ -25,10 +51,8 @@ export function Dice({ value, color, rolling = false }: DiceProps) {
     <div
       className={cn(
         "relative w-12 h-12 rounded-xl border-2 shadow-lg transition-transform",
-        isRed
-          ? "bg-red-900 border-red-500"
-          : "bg-white border-slate-300",
-        rolling && "animate-bounce"
+        isRed ? "bg-red-900 border-red-500" : "bg-white border-slate-300",
+        rolling && "animate-bounce",
       )}
     >
       <svg viewBox="0 0 100 100" className="w-full h-full">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { searchUsers, sendInvite } from "@/lib/actions/room";
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
@@ -17,13 +17,20 @@ interface InvitePlayerModalProps {
   onClose: () => void;
 }
 
-export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerModalProps) {
+export function InvitePlayerModal({
+  roomCode,
+  roomId,
+  onClose,
+}: InvitePlayerModalProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [message, setMessage] = useState<{
+    text: string;
+    type: "success" | "error";
+  } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -41,61 +48,78 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  const handleSearch = useCallback((value: string) => {
-    setQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    debounceRef.current = setTimeout(async () => {
-      setLoading(true);
+  const handleSearch = useCallback(
+    (value: string) => {
+      setQuery(value);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (value.trim().length < 2) {
+        setResults([]);
+        return;
+      }
+      debounceRef.current = setTimeout(async () => {
+        setLoading(true);
+        try {
+          const data = await searchUsers(value, roomId);
+          setResults(data);
+        } finally {
+          setLoading(false);
+        }
+      }, 400);
+    },
+    [roomId],
+  );
+
+  const handleInvite = useCallback(
+    async (profile: Profile) => {
+      if (sentIds.has(profile.id) || sending) return;
+      setSending(profile.id);
+      setMessage(null);
       try {
-        const data = await searchUsers(value, roomId);
-        setResults(data);
+        const result = await sendInvite(profile.id, roomCode);
+        if (result?.success) {
+          setSentIds((prev) => new Set(prev).add(profile.id));
+          setMessage({
+            text: `✅ Undangan terkirim ke ${profile.name}!`,
+            type: "success",
+          });
+
+          // 🔔 Broadcast langsung ke channel penerima supaya realtime tanpa refresh
+          const supabase = createClient();
+          await supabase.channel(`invites:${profile.id}`).send({
+            type: "broadcast",
+            event: "new_invite",
+            payload: { fromRoomCode: roomCode },
+          });
+        } else {
+          setMessage({
+            text: result?.message ?? "Gagal mengirim undangan.",
+            type: "error",
+          });
+        }
+      } catch {
+        setMessage({ text: "Terjadi kesalahan. Coba lagi.", type: "error" });
       } finally {
-        setLoading(false);
+        setSending(null);
       }
-    }, 400);
-  }, [roomId]);
-
-  const handleInvite = useCallback(async (profile: Profile) => {
-    if (sentIds.has(profile.id) || sending) return;
-    setSending(profile.id);
-    setMessage(null);
-    try {
-      const result = await sendInvite(profile.id, roomCode);
-      if (result?.success) {
-        setSentIds((prev) => new Set(prev).add(profile.id));
-        setMessage({ text: `✅ Undangan terkirim ke ${profile.name}!`, type: "success" });
-
-        // 🔔 Broadcast langsung ke channel penerima supaya realtime tanpa refresh
-        const supabase = createClient();
-        await supabase.channel(`invites:${profile.id}`).send({
-          type: "broadcast",
-          event: "new_invite",
-          payload: { fromRoomCode: roomCode },
-        });
-      } else {
-        setMessage({ text: result?.message ?? "Gagal mengirim undangan.", type: "error" });
-      }
-    } catch {
-      setMessage({ text: "Terjadi kesalahan. Coba lagi.", type: "error" });
-    } finally {
-      setSending(null);
-    }
-  }, [sentIds, sending, roomCode]);
+    },
+    [sentIds, sending, roomCode],
+  );
 
   return (
     /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
-        style={{ background: "var(--card)", border: "1.5px solid var(--border)" }}
+        style={{
+          background: "var(--card)",
+          border: "1.5px solid var(--border)",
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
@@ -155,7 +179,10 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
         {/* Results */}
         <div className="px-6 pb-6 min-h-30">
           {loading && (
-            <div className="flex items-center justify-center py-8 gap-2" style={{ color: "var(--t3)" }}>
+            <div
+              className="flex items-center justify-center py-8 gap-2"
+              style={{ color: "var(--t3)" }}
+            >
               <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin inline-block" />
               <span className="text-sm">Mencari...</span>
             </div>
@@ -214,7 +241,10 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
 
                     {/* Nama */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate" style={{ color: "var(--t1)" }}>
+                      <p
+                        className="font-medium text-sm truncate"
+                        style={{ color: "var(--t1)" }}
+                      >
                         {profile.name}
                       </p>
                     </div>
@@ -225,10 +255,22 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
                       disabled={isSent || isSending}
                       className="shrink-0 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all"
                       style={{
-                        background: isSent ? "#22C55E" : isSending ? "#E5E7EB" : "var(--pp)",
-                        color: isSent || isSending ? (isSent ? "white" : "var(--t3)") : "white",
+                        background: isSent
+                          ? "#22C55E"
+                          : isSending
+                            ? "#E5E7EB"
+                            : "var(--pp)",
+                        color:
+                          isSent || isSending
+                            ? isSent
+                              ? "white"
+                              : "var(--t3)"
+                            : "white",
                         cursor: isSent || isSending ? "not-allowed" : "pointer",
-                        boxShadow: isSent || isSending ? "none" : "0 2px 8px rgba(124,111,247,0.3)",
+                        boxShadow:
+                          isSent || isSending
+                            ? "none"
+                            : "0 2px 8px rgba(124,111,247,0.3)",
                       }}
                     >
                       {isSent ? "✓ Terkirim" : isSending ? "..." : "Undang"}

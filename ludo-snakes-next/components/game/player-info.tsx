@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { cn } from "@/lib/utils";
 import type { PlayerState } from "@/types/database";
 
@@ -9,13 +10,44 @@ interface PlayerInfoProps {
   currentUserId: string;
 }
 
-const COLOR_CONFIG: Record<string, {
-  bg: string; border: string; text: string; label: string; pion: string;
-}> = {
-  red:    { bg: "bg-red-500/10",    border: "border-red-500/30",    text: "text-red-400",    label: "Merah",  pion: "bg-red-500"    },
-  blue:   { bg: "bg-blue-500/10",   border: "border-blue-500/30",   text: "text-blue-400",   label: "Biru",   pion: "bg-blue-500"   },
-  green:  { bg: "bg-green-500/10",  border: "border-green-500/30",  text: "text-green-400",  label: "Hijau",  pion: "bg-green-500"  },
-  yellow: { bg: "bg-yellow-500/10", border: "border-yellow-500/30", text: "text-yellow-400", label: "Kuning", pion: "bg-yellow-400" },
+const COLOR_CONFIG: Record<
+  string,
+  {
+    bg: string;
+    border: string;
+    text: string;
+    label: string;
+    pion: string;
+  }
+> = {
+  red: {
+    bg: "bg-red-500/10",
+    border: "border-red-500/30",
+    text: "text-red-400",
+    label: "Merah",
+    pion: "bg-red-500",
+  },
+  blue: {
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/30",
+    text: "text-blue-400",
+    label: "Biru",
+    pion: "bg-blue-500",
+  },
+  green: {
+    bg: "bg-green-500/10",
+    border: "border-green-500/30",
+    text: "text-green-400",
+    label: "Hijau",
+    pion: "bg-green-500",
+  },
+  yellow: {
+    bg: "bg-yellow-500/10",
+    border: "border-yellow-500/30",
+    text: "text-yellow-400",
+    label: "Kuning",
+    pion: "bg-yellow-400",
+  },
 };
 
 export function PlayerInfo({
@@ -26,9 +58,9 @@ export function PlayerInfo({
   return (
     <div className="grid grid-cols-2 gap-2">
       {players.map((player) => {
-        const cfg      = COLOR_CONFIG[player.color];
+        const cfg = COLOR_CONFIG[player.color];
         const isMyTurn = player.order === currentTurnOrder;
-        const isMe     = player.user_id === currentUserId;
+        const isMe = player.user_id === currentUserId;
 
         return (
           <div
@@ -40,7 +72,7 @@ export function PlayerInfo({
               isMyTurn && "ring-2 ring-offset-1 ring-offset-slate-900",
               isMyTurn && `ring-${player.color}-400`,
               player.finished && "opacity-50",
-              player.left && "opacity-30"
+              player.left && "opacity-30",
             )}
           >
             <div className="flex items-center gap-2 mb-1">
@@ -59,10 +91,10 @@ export function PlayerInfo({
               {player.finished
                 ? "🏆 Finish"
                 : player.left
-                ? "🚪 Keluar"
-                : player.in_base
-                ? "Base"
-                : `Kotak ${player.position}`}
+                  ? "🚪 Keluar"
+                  : player.in_base
+                    ? "Base"
+                    : `Kotak ${player.position}`}
             </p>
           </div>
         );

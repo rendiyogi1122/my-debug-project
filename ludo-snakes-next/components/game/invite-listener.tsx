@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { InviteCard } from "./invite-card";
@@ -20,7 +20,10 @@ interface InviteListenerProps {
   initialInvites: Invite[];
 }
 
-export function InviteListener({ userId, initialInvites }: InviteListenerProps) {
+export function InviteListener({
+  userId,
+  initialInvites,
+}: InviteListenerProps) {
   const router = useRouter();
   const [invites, setInvites] = useState<Invite[]>(initialInvites);
 
@@ -29,11 +32,13 @@ export function InviteListener({ userId, initialInvites }: InviteListenerProps) 
     const supabase = createClient();
     const { data } = await supabase
       .from("invites")
-      .select(`
+      .select(
+        `
         *,
         rooms(room_code, status),
         profiles!invites_from_user_id_fkey(name, avatar_url)
-      `)
+      `,
+      )
       .eq("to_user_id", userId)
       .eq("status", "pending")
       .order("created_at", { ascending: false });
@@ -57,7 +62,7 @@ export function InviteListener({ userId, initialInvites }: InviteListenerProps) 
         },
         async () => {
           await refetchInvites();
-        }
+        },
       )
       .on(
         "postgres_changes" as any,
@@ -69,7 +74,7 @@ export function InviteListener({ userId, initialInvites }: InviteListenerProps) 
         },
         async () => {
           await refetchInvites();
-        }
+        },
       )
       .subscribe();
 
