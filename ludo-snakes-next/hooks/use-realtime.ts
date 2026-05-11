@@ -37,7 +37,7 @@ export function useRealtime({
           table,
           ...(filter ? { filter } : {}),
         },
-        onPostgresChange
+        onPostgresChange,
       );
     }
 
@@ -52,9 +52,9 @@ export function useRealtime({
     channelRef.current = ch;
 
     return () => {
-      supabase.removeChannel(ch);
+      ch.unsubscribe();
     };
-  }, [channel]);
+  }, [channel, onPostgresChange, table, filter, onBroadcast, broadcastEvents]);
 
   // Fungsi untuk kirim broadcast
   function sendBroadcast(event: string, payload: any) {

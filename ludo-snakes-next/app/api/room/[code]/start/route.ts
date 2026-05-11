@@ -1,21 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
-// Definisi ular dan tangga — sama persis dengan versi Laravel kamu
-const SNAKES: Record<number, number> = {
-  17: 7, 54: 34, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 99: 78,
-};
-
-const LADDERS: Record<number, number> = {
-  4: 14, 9: 31, 20: 38, 28: 84, 40: 59, 51: 67, 63: 81, 71: 91,
-};
+import { SNAKES, LADDERS } from "@/lib/game-engine"; // ← single source of truth
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ code: string }> }
+  { params }: { params: Promise<{ code: string }> },
 ) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,7 +25,10 @@ export async function POST(
     .single();
 
   if (!room) {
-    return NextResponse.json({ error: "Room tidak ditemukan" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Room tidak ditemukan" },
+      { status: 404 },
+    );
   }
 
   // Hanya host yang bisa mulai
@@ -44,10 +41,7 @@ export async function POST(
   }
 
   if (room.room_players.length < 2) {
-    return NextResponse.json(
-      { error: "Minimal 2 pemain" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Minimal 2 pemain" }, { status: 400 });
   }
 
   // Susun initial game state
@@ -62,14 +56,15 @@ export async function POST(
       in_base: true,
       finished: false,
       left: false,
+      has_rolled: false,
     }));
 
   const initialState = {
     players,
     current_turn_order: 1,
     winner: null,
-    snakes: SNAKES,
-    ladders: LADDERS,
+    snakes: SNAKES,   // dari game-engine.ts — papan 50 kotak
+    ladders: LADDERS, // dari game-engine.ts — papan 50 kotak
     last_roll: null,
   };
 
@@ -83,10 +78,7 @@ export async function POST(
     .eq("id", room.id);
 
   if (error) {
-    return NextResponse.json(
-      { error: "Gagal memulai game" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Gagal memulai game" }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

@@ -153,7 +153,7 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
         )}
 
         {/* Results */}
-        <div className="px-6 pb-6 min-h-[120px]">
+        <div className="px-6 pb-6 min-h-30">
           {loading && (
             <div className="flex items-center justify-center py-8 gap-2" style={{ color: "var(--t3)" }}>
               <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin inline-block" />
@@ -200,12 +200,12 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
                         alt={profile.name}
                         width={40}
                         height={40}
-                        className="rounded-full flex-shrink-0"
+                        className="rounded-full shrink-0"
                         style={{ border: "2px solid white" }}
                       />
                     ) : (
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0"
                         style={{ background: "#E5E7EB" }}
                       >
                         😊
@@ -223,7 +223,7 @@ export function InvitePlayerModal({ roomCode, roomId, onClose }: InvitePlayerMod
                     <button
                       onClick={() => handleInvite(profile)}
                       disabled={isSent || isSending}
-                      className="flex-shrink-0 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                      className="shrink-0 px-4 py-1.5 rounded-xl text-xs font-semibold transition-all"
                       style={{
                         background: isSent ? "#22C55E" : isSending ? "#E5E7EB" : "var(--pp)",
                         color: isSent || isSending ? (isSent ? "white" : "var(--t3)") : "white",

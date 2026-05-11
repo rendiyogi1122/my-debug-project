@@ -44,6 +44,7 @@ export type PlayerState = {
   in_base: boolean;
   finished: boolean;
   left: boolean;
+  has_rolled: boolean;
 };
 
 export type GameState = {
