@@ -43,9 +43,9 @@ export function rollDice(): {
 }
 
 // ── Cek apakah bisa keluar dari base ────────────────────────
-// Butuh salah satu dadu putih = 6
+// Butuh jumlah kedua dadu putih = 6
 export function canExitBase(white1: number, white2: number): boolean {
-  return white1 === 6 || white2 === 6;
+  return white1 + white2 === 6;
 }
 
 // ── Advance turn dengan reset has_rolled ──────────────────
@@ -92,7 +92,7 @@ export function processTurn(
       events.push(`${player.color} keluar dari base! Posisi: 1`);
     } else {
       events.push(
-        `${player.color} belum bisa keluar (butuh angka 6 di dadu putih)`,
+        `${player.color} belum bisa keluar (butuh jumlah dadu putih = 6)`,
       );
     }
     newState.last_roll = { ...roll, by: userId };
