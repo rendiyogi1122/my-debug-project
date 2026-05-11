@@ -23,6 +23,9 @@ export function useRealtime({
 }: UseRealtimeOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
 
+  // Stabilkan referensi broadcastEvents agar tidak trigger re-subscribe setiap render
+  const broadcastKey = broadcastEvents.join(",");
+
   useEffect(() => {
     const supabase = createClient();
     const ch = supabase.channel(channel);
@@ -42,7 +45,7 @@ export function useRealtime({
     }
 
     // Mode 2: listen broadcast events
-    broadcastEvents.forEach((event) => {
+    broadcastKey.split(",").filter(Boolean).forEach((event) => {
       ch.on("broadcast", { event }, (payload) => {
         onBroadcast?.(event, payload);
       });
@@ -54,7 +57,7 @@ export function useRealtime({
     return () => {
       ch.unsubscribe();
     };
-  }, [channel, onPostgresChange, table, filter, onBroadcast, broadcastEvents]);
+  }, [channel, onPostgresChange, table, filter, onBroadcast, broadcastKey]);
 
   // Fungsi untuk kirim broadcast
   function sendBroadcast(event: string, payload: any) {

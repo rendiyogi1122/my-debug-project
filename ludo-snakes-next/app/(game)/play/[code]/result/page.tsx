@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { createRoom } from "@/lib/actions/room";
 import type { GameState } from "@/types/database";
 
 export default async function ResultPage({
@@ -31,12 +32,12 @@ export default async function ResultPage({
   };
   const MEDALS = ["🥇","🥈","🥉","🏅"];
 
-  const ranked = state?.players
+  const ranked = [...(state?.players ?? [])]
     .sort((a, b) => {
       if (a.finished && !b.finished) return -1;
       if (!a.finished && b.finished) return 1;
       return b.position - a.position;
-    }) ?? [];
+    });
 
   return (
     <div className="max-w-md mx-auto space-y-5 animate-fade-up">
@@ -103,12 +104,14 @@ export default async function ResultPage({
 
       {/* Tombol */}
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/dashboard"
-          className="py-3.5 rounded-2xl text-sm font-semibold text-center transition-all hover:scale-[1.02]"
-          style={{ background:"var(--pp)", color:"#fff",
-            boxShadow:"0 4px 14px rgba(124,111,247,.35)" }}>
-          🔄 Main Lagi
-        </Link>
+        <form action={createRoom}>
+          <button type="submit"
+            className="w-full py-3.5 rounded-2xl text-sm font-semibold text-center transition-all hover:scale-[1.02] cursor-pointer"
+            style={{ background:"var(--pp)", color:"#fff",
+              boxShadow:"0 4px 14px rgba(124,111,247,.35)" }}>
+            🔄 Main Lagi
+          </button>
+        </form>
         <Link href="/dashboard"
           className="py-3.5 rounded-2xl text-sm font-semibold text-center transition-all hover:scale-[1.02]"
           style={{ background:"var(--pp-l)", color:"var(--pp)",

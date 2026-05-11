@@ -82,116 +82,195 @@ export function GameClient({
   // Rekam posisi sebelum update agar tahu dari mana animasi harus mulai
   const prevPositionsRef = useRef<Record<string, number>>({});
 
+  // Ref untuk currentUserId agar bisa diakses di callback tanpa stale closure
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
+
+  // Ref untuk melacak last_roll sebelumnya — deteksi kapan ada roll baru
+  const lastRollIdRef = useRef<string>(
+    initialState.last_roll ? `${initialState.last_roll.by}-${initialState.last_roll.white1}-${initialState.last_roll.white2}-${initialState.last_roll.red}` : ""
+  );
+
   useRealtime({
     channel: `game:${roomId}`,
     table: "rooms",
     filter: `id=eq.${roomId}`,
-    broadcastEvents: ["roll_update"],
+    broadcastEvents: [],
     onPostgresChange: useCallback(
       (payload: any) => {
-        if (payload.new?.state) setState(payload.new.state as GameState);
-        if (payload.new?.status === "finished")
-          setTimeout(() => router.push(`/play/${roomCode}/result`), 1500);
-      },
-      [router, roomCode],
-    ),
-    onBroadcast: useCallback((event: string, payload: any) => {
-      if (event === "roll_update" && payload?.state) {
-        const newState = payload.state as GameState;
+        if (!payload.new?.state) return;
 
-        if (payload.events) {
-          setEvents((prev) => [...payload.events, ...prev].slice(0, 10));
+        const newState = payload.new.state as GameState;
+        const newRoll = newState.last_roll;
+        const newRollId = newRoll ? `${newRoll.by}-${newRoll.white1}-${newRoll.white2}-${newRoll.red}` : "";
+        const oldRollId = lastRollIdRef.current;
+        lastRollIdRef.current = newRollId;
+
+        const isNewRoll = newRollId !== oldRollId && newRoll;
+        const isMyRoll = newRoll?.by === currentUserIdRef.current;
+
+        // ── Ada roll baru dari pemain LAIN → animasi dadu + pion ──
+        if (isNewRoll && !isMyRoll) {
+          // 1. Mulai animasi slot machine
+          setDiceAnim(true);
+          let tick = 0;
+          const iv = setInterval(() => {
+            setDisplayDice({
+              w1: Math.ceil(Math.random() * 6),
+              w2: Math.ceil(Math.random() * 6),
+              r: Math.ceil(Math.random() * 6),
+            });
+            if (++tick > 8) clearInterval(iv);
+          }, 70);
+
+          // 2. Setelah animasi selesai, tampilkan angka asli + update state
+          setTimeout(() => {
+            setDisplayDice({
+              w1: newRoll.white1,
+              w2: newRoll.white2,
+              r: newRoll.red,
+            });
+            setDiceAnim(false);
+
+            // 3. Deteksi animasi pion (walk / snake / ladder)
+            const prevPositions = prevPositionsRef.current;
+            let detectedAnim: AnimatingPlayer | null = null;
+
+            for (const p of newState.players) {
+              const prevPos = prevPositions[p.user_id];
+              if (prevPos === undefined) continue;
+              const newPos = p.position;
+              if (newPos === prevPos) continue;
+              if (p.in_base) continue;
+              if (newRoll.by !== p.user_id) continue;
+
+              const net = newRoll.white1 + newRoll.white2 - newRoll.red;
+              const rawPos = Math.min(50, Math.max(1, prevPos + net));
+
+              if (SNAKES[rawPos] !== undefined && newPos === SNAKES[rawPos]) {
+                detectedAnim = {
+                  userId: p.user_id, fromPos: prevPos, toPos: rawPos, type: "snake",
+                  onDone: () => { setAnimPlayer(null); const ps = pendingStateRef.current; if (ps) { setState(ps); pendingStateRef.current = null; } },
+                };
+              } else if (LADDERS[rawPos] !== undefined && newPos === LADDERS[rawPos]) {
+                detectedAnim = {
+                  userId: p.user_id, fromPos: prevPos, toPos: rawPos, type: "ladder",
+                  onDone: () => { setAnimPlayer(null); const ps = pendingStateRef.current; if (ps) { setState(ps); pendingStateRef.current = null; } },
+                };
+              } else {
+                detectedAnim = {
+                  userId: p.user_id, fromPos: prevPos, toPos: newPos, type: "walk",
+                  onDone: () => { setAnimPlayer(null); const ps = pendingStateRef.current; if (ps) { setState(ps); pendingStateRef.current = null; } },
+                };
+              }
+              break;
+            }
+
+            // Update prevPositions
+            newState.players.forEach((p) => {
+              if (!p.in_base && p.position > 0) {
+                prevPositionsRef.current[p.user_id] = p.position;
+              }
+            });
+
+            if (detectedAnim) {
+              pendingStateRef.current = newState;
+              setAnimPlayer(detectedAnim);
+            } else {
+              setState(newState);
+            }
+
+            // Update events log
+            setEvents((prev) => {
+              const lastRoll = newState.last_roll;
+              if (!lastRoll) return prev;
+              const roller = newState.players.find(p => p.user_id === lastRoll.by);
+              const net = lastRoll.white1 + lastRoll.white2 - lastRoll.red;
+              const msg = `${roller?.color ?? "?"} roll: ${lastRoll.white1}+${lastRoll.white2}-${lastRoll.red} = ${net >= 0 ? "+" : ""}${net}`;
+              return [msg, ...prev].slice(0, 10);
+            });
+          }, 700);
+
+          return; // Jangan update state dulu, tunggu animasi selesai
         }
 
-        // Deteksi siapa yang bergerak & tentukan jenis animasi
-        const prevPositions = prevPositionsRef.current;
-        let detectedAnim: AnimatingPlayer | null = null;
+        // ── Roll oleh DIRI SENDIRI → animasi pion tanpa animasi dadu ──
+        if (isNewRoll && isMyRoll) {
+          // Dice sudah di-handle oleh handleRoll, cukup update dadu final
+          setDisplayDice({
+            w1: newRoll.white1,
+            w2: newRoll.white2,
+            r: newRoll.red,
+          });
 
-        for (const p of newState.players) {
-          const prevPos = prevPositions[p.user_id];
-          if (prevPos === undefined) continue;
-          const newPos = p.position;
-          if (newPos === prevPos) continue;
-          if (p.in_base) continue; // masuk base = tidak ada animasi jalan
+          // Deteksi animasi pion untuk rolling player juga
+          const prevPositions = prevPositionsRef.current;
+          let detectedAnim: AnimatingPlayer | null = null;
 
-          // Tentukan posisi intermediate (before snake/ladder applied)
-          const lastRoll = newState.last_roll;
-          if (!lastRoll || lastRoll.by !== p.user_id) continue;
+          for (const p of newState.players) {
+            const prevPos = prevPositions[p.user_id];
+            if (prevPos === undefined) continue;
+            const newPos = p.position;
+            if (newPos === prevPos) continue;
+            if (p.in_base) continue;
+            if (newRoll.by !== p.user_id) continue;
 
-          const net = lastRoll.white1 + lastRoll.white2 - lastRoll.red;
-          const rawPos = Math.min(50, Math.max(1, prevPos + net));
+            const net = newRoll.white1 + newRoll.white2 - newRoll.red;
+            const rawPos = Math.min(50, Math.max(1, prevPos + net));
 
-          if (SNAKES[rawPos] !== undefined && newPos === SNAKES[rawPos]) {
-            // Kena ular: animasi walk ke kepala, lalu slide turun
-            detectedAnim = {
-              userId: p.user_id,
-              fromPos: prevPos,
-              toPos: rawPos, // kepala ular
-              type: "snake",
-              onDone: () => {
-                setAnimPlayer(null);
-                const ps = pendingStateRef.current;
-                if (ps) {
-                  setState(ps);
-                  pendingStateRef.current = null;
-                }
-              },
-            };
-          } else if (
-            LADDERS[rawPos] !== undefined &&
-            newPos === LADDERS[rawPos]
-          ) {
-            // Naik tangga
-            detectedAnim = {
-              userId: p.user_id,
-              fromPos: prevPos,
-              toPos: rawPos, // bawah tangga
-              type: "ladder",
-              onDone: () => {
-                setAnimPlayer(null);
-                const ps = pendingStateRef.current;
-                if (ps) {
-                  setState(ps);
-                  pendingStateRef.current = null;
-                }
-              },
-            };
-          } else {
-            // Jalan biasa (termasuk kotak 25 / finish)
-            detectedAnim = {
-              userId: p.user_id,
-              fromPos: prevPos,
-              toPos: newPos,
-              type: "walk",
-              onDone: () => {
-                setAnimPlayer(null);
-                const ps = pendingStateRef.current;
-                if (ps) {
-                  setState(ps);
-                  pendingStateRef.current = null;
-                }
-              },
-            };
+            if (SNAKES[rawPos] !== undefined && newPos === SNAKES[rawPos]) {
+              detectedAnim = {
+                userId: p.user_id, fromPos: prevPos, toPos: rawPos, type: "snake",
+                onDone: () => { setAnimPlayer(null); const ps = pendingStateRef.current; if (ps) { setState(ps); pendingStateRef.current = null; } },
+              };
+            } else if (LADDERS[rawPos] !== undefined && newPos === LADDERS[rawPos]) {
+              detectedAnim = {
+                userId: p.user_id, fromPos: prevPos, toPos: rawPos, type: "ladder",
+                onDone: () => { setAnimPlayer(null); const ps = pendingStateRef.current; if (ps) { setState(ps); pendingStateRef.current = null; } },
+              };
+            } else {
+              detectedAnim = {
+                userId: p.user_id, fromPos: prevPos, toPos: newPos, type: "walk",
+                onDone: () => { setAnimPlayer(null); const ps = pendingStateRef.current; if (ps) { setState(ps); pendingStateRef.current = null; } },
+              };
+            }
+            break;
           }
-          break;
+
+          // Update prevPositions
+          newState.players.forEach((p) => {
+            if (!p.in_base && p.position > 0) {
+              prevPositionsRef.current[p.user_id] = p.position;
+            }
+          });
+
+          if (detectedAnim) {
+            pendingStateRef.current = newState;
+            setAnimPlayer(detectedAnim);
+          } else {
+            setState(newState);
+          }
+
+          if (payload.new?.status === "finished")
+            setTimeout(() => router.push(`/play/${roomCode}/result`), 1500);
+          return;
         }
 
-        // Update prevPositions untuk ronde berikutnya
+        // ── Bukan roll baru → langsung update state ──
+        // Update prevPositions
         newState.players.forEach((p) => {
           if (!p.in_base && p.position > 0) {
             prevPositionsRef.current[p.user_id] = p.position;
           }
         });
 
-        if (detectedAnim) {
-          pendingStateRef.current = newState;
-          // State sementara: posisi belum berubah untuk visual (animasi yang gerakkan pion)
-          setAnimPlayer(detectedAnim);
-        } else {
-          setState(newState);
-        }
-      }
-    }, []),
+        setState(newState);
+
+        if (payload.new?.status === "finished")
+          setTimeout(() => router.push(`/play/${roomCode}/result`), 1500);
+      },
+      [router, roomCode],
+    ),
   });
 
   const currentPlayer = getCurrentPlayer(state);
@@ -215,6 +294,7 @@ export function GameClient({
     setRolling(true);
     setDiceAnim(true);
     setError(null);
+
 
     let tick2 = 0;
     const iv = setInterval(() => {
@@ -241,6 +321,9 @@ export function GameClient({
         r: data.roll.red,
       });
       setEvents((prev) => [...data.events, ...prev].slice(0, 10));
+
+      // JANGAN setState di sini — biar onPostgresChange yang handle
+      // agar animasi pion bisa terdeteksi (prevPositionsRef belum berubah)
     } catch {
       setError("Gagal terhubung ke server");
     } finally {
@@ -431,6 +514,7 @@ export function GameClient({
                     flexDirection: "column",
                     width: "100%",
                     animation: diceAnim ? `slot-roll 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards` : "none",
+                    transform: diceAnim ? undefined : "translateY(-420px)",
                     transformOrigin: "center",
                   }}
                 >
@@ -475,6 +559,7 @@ export function GameClient({
                     flexDirection: "column",
                     width: "100%",
                     animation: diceAnim ? `slot-roll 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards` : "none",
+                    transform: diceAnim ? undefined : "translateY(-420px)",
                     transformOrigin: "center",
                   }}
                 >
@@ -521,6 +606,7 @@ export function GameClient({
                     flexDirection: "column",
                     width: "100%",
                     animation: diceAnim ? `slot-roll 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards` : "none",
+                    transform: diceAnim ? undefined : "translateY(-420px)",
                     transformOrigin: "center",
                   }}
                 >

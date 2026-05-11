@@ -240,7 +240,7 @@ export function isGameOver(state: GameState): boolean {
 // ── Dapatkan pemain yang sedang giliran ──────────────────────
 export function getCurrentPlayer(state: GameState): PlayerState | undefined {
   const player = state.players.find(
-    (p) => p.order === state.current_turn_order && !p.left,
+    (p) => p.order === state.current_turn_order && !p.left && !p.finished,
   );
 
   // Fallback: jika tidak menemukan, kembalikan pemain aktif pertama dengan order terkecil

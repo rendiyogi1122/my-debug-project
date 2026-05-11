@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { rollDice, processTurn, getCurrentPlayer } from "@/lib/game-engine";
 import type { GameState } from "@/types/database";
@@ -19,15 +20,17 @@ export async function POST(
   const { code } = await params;
   const roomCode = code.toUpperCase();
 
-  // 1. Ambil data room dari database
-  const { data: room, error: roomError } = await supabase
+  // Admin client untuk operasi write (bypass RLS)
+  const admin = createAdminClient();
+
+  // 1. Ambil data room dari database (admin bypass RLS)
+  const { data: room, error: roomError } = await admin
     .from("rooms")
     .select("id, state, status")
     .eq("room_code", roomCode)
     .single();
 
   if (roomError || !room) {
-    console.error("[ROLL] Room not found:", roomCode, roomError);
     return NextResponse.json(
       { error: "Room tidak ditemukan" },
       { status: 404 },
@@ -51,10 +54,6 @@ export async function POST(
 
   // 2. Validasi giliran
   const currentPlayer = getCurrentPlayer(currentState);
-  console.log("[ROLL] current_turn_order:", currentState.current_turn_order);
-  console.log("[ROLL] currentPlayer:", currentPlayer?.user_id, "order:", currentPlayer?.order, "has_rolled:", currentPlayer?.has_rolled);
-  console.log("[ROLL] requesting user:", user.id);
-
   if (!currentPlayer || currentPlayer.user_id !== user.id) {
     return NextResponse.json(
       { error: "Bukan giliranmu" },
@@ -82,24 +81,18 @@ export async function POST(
   // 4. Proses giliran dengan logika TypeScript (game-engine.ts)
   const { newState, events } = processTurn(currentState, user.id, roll);
 
-  console.log("[ROLL] BEFORE turn_order:", currentState.current_turn_order);
-  console.log("[ROLL] AFTER  turn_order:", newState.current_turn_order);
-  console.log("[ROLL] Players has_rolled:", newState.players.map(p => ({ order: p.order, has_rolled: p.has_rolled, user_id: p.user_id.slice(0,8) })));
-
   // 5. Tentukan apakah game sudah selesai
   const newStatus = newState.winner ? "finished" : "playing";
 
-  // 6. Simpan state baru ke database
-  const { data: updateData, error: updateError } = await supabase
+  // 6. Simpan state baru ke database (admin bypass RLS)
+  const { error: updateError } = await admin
     .from("rooms")
     .update({
       state: newState as any,
       status: newStatus,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", room.id)
-    .select("id")
-    .single();
+    .eq("id", room.id);
 
   if (updateError) {
     console.error("[ROLL] Update error:", updateError);
@@ -109,24 +102,16 @@ export async function POST(
     );
   }
 
-  if (!updateData) {
-    console.error("[ROLL] Update returned no data — RLS mungkin memblokir UPDATE!");
-    return NextResponse.json(
-      { error: "Gagal menyimpan state (RLS)" },
-      { status: 403 },
-    );
-  }
-
-  console.log("[ROLL] State saved successfully. New turn_order:", newState.current_turn_order);
-
-  // 7. Broadcast ke semua pemain via Supabase Realtime
+  // 7. Broadcast ke semua pemain via Supabase Realtime (httpSend untuk server-side)
   try {
-    await supabase.channel(`game:${room.id}`).send({
+    const channel = admin.channel(`game:${room.id}`);
+    await channel.subscribe();
+    await channel.send({
       type: "broadcast",
       event: "roll_update",
       payload: { state: newState, events, roll },
     });
-    console.log("[ROLL] Broadcast sent to channel game:" + room.id);
+    await admin.removeChannel(channel);
   } catch (e) {
     console.error("[ROLL] Broadcast failed:", e);
   }

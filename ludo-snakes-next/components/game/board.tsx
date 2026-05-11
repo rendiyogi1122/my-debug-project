@@ -432,7 +432,7 @@ export function Board({ players, animatingPlayer }: BoardProps) {
         style={{
           display: "block",
           width: "100%",
-          aspectRatio: "1/1",
+          aspectRatio: "2/1",
           borderRadius: 10,
           border: "0.5px solid var(--border)",
         }}
